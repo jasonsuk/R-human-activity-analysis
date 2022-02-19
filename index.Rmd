@@ -34,8 +34,8 @@ A set of Fitbit's public data set is used to gain insights of how users use the 
 
 ```{r}
 # Load data
-df.activity = read.csv('Data/dailyActivity_merged.csv')
-df.sleep = read.csv('Data/sleepDay_merged.csv')
+df.activity = read.csv('data/dailyActivity_merged.csv')
+df.sleep = read.csv('data/sleepDay_merged.csv')
 ```
 
 ```{r}

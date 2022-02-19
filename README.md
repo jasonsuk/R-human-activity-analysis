@@ -9,6 +9,10 @@ You have been asked to focus on one of Bellabeat’s products and analyze smart 
 
 ---
 
+## Deployment
+
+The analysis report is deployed on Github Page following the link: https://jasonsuk.github.io/R-human-activity-analysis/
+
 ## Data analysis roadmap
 
 ### 1. Ask
