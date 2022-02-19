@@ -8,6 +8,7 @@ The Project replicates real-world tasks where a data analyst work on the marketi
 You have been asked to focus on one of Bellabeat’s products and analyze smart device data to gain insight into how consumers are using their smart devices. The insights you discover will then help guide marketing strategy for the company. You will present your analysis to the Bellabeat executive team along with your high-level recommendations for Bellabeat’s marketing strategy.
 
 ---
+
 ## Data analysis roadmap
 
 ### 1. Ask
@@ -67,5 +68,6 @@ The publicly available data of non-Bellabeat smart devices will be used. [FitBit
 
 
 ---
+
 ## Acknowledgement
 The project is outlined by [Google Data Analytics Specialization](https://www.coursera.org/professional-certificates/google-data-analytics). 

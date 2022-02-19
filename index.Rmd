@@ -1,28 +1,27 @@
 ---
 title: "Health Product User Analaysis"
-
-output: html_notebook
+output:
+  html_document:
+    df_print: paged
 ---
 
-Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Cmd+Shift+Enter*. Add a new chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Cmd+Option+I*. When you save the notebook, an HTML file containing the code and output will be saved alongside it (click the *Preview* button or press *Cmd+Shift+K* to preview the HTML file). The preview shows you a rendered HTML copy of the contents of the editor. Consequently, unlike *Knit*, *Preview* does not run any R code chunks. Instead, the output of the chunk when it was last run in the editor is displayed.
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, comment = NA)
+```
 
-```{r}
+```{r, echo=TRUE, results='hide',  message=FALSE,  warning=FALSE}
 # Remove all objects 
 rm(list=ls(all=TRUE))
 
-# Set a working directory
-setwd("~/Documents/data_analysis_for_fun/bellabeat")
-
 # Load packages
-library(tidyverse)
-library(dplyr)
-library(ggplot2)
+library(tidyverse); library(dplyr); library(ggplot2)
 
 # install.packages('gridExtra')
 library(gridExtra)
 ```
 
 ---
+
 ## 1. Load and inspect data
 
 ### Overview:
@@ -55,7 +54,9 @@ n_unique(df.sleep$Id) # 24/33 -  some missing values found
 ```
 
 ---
-## 2. Data cleaning
+
+## 2. Clean data
+
 ```{r}
 # Unify common column names (id, date) before merging
 df.activity = rename(df.activity, Date=ActivityDate)
@@ -64,20 +65,27 @@ df.sleep = rename(df.sleep, Date=SleepDay)
 # Convert into date object
 df.activity$Date = as.Date(df.activity$Date, format='%m/%d/%Y') # date string -> date
 df.sleep$Date = as.Date(df.sleep$Date, format='%m/%d/%Y') # datetime string -> date
+```
 
+```{r}
 # Make sure all records are unique by Id and Date(daily)
-df.activity %>% duplicated(, 1:2) %>% sum() # no duplicated field
-df.sleep %>% duplicated(,1:2) %>% sum() # 3 duplicated fields
+df.activity %>% duplicated() %>% sum() # no duplicated field
+df.sleep %>% duplicated() %>% sum() # 3 duplicated fields
+```
 
+```{r}
 # Inspect duplication in 'df.sleep'
 df.sleep[duplicated(df.sleep[,1:2]), c('Id', 'Date')] 
 ```
+
+
 ```{r}
 # Further inspection of the three duplicated records
 df.sleep[which(df.sleep$Id == 4388161847 & df.sleep$Date == '2016-05-05'), ]
 df.sleep[which(df.sleep$Id == 4702921684 & df.sleep$Date == '2016-05-07'), ]
 df.sleep[which(df.sleep$Id == 8378563200 & df.sleep$Date == '2016-04-25'), ]
 ```
+
 ```{r}
 # Remove duplicates records as they are identical
 # dim(df.sleep) # before removal 413 x 5
@@ -87,26 +95,27 @@ dim(df.sleep) # after removal 410 x 5
 
 
 ```{r}
-# Merge data frames
-df.clean = merge(df.activity, df.sleep, all.x=TRUE, by.x=c('Id','Date'))
-# view(df.clean)
-tibble(df.clean) # remember there are some missing data from sleep data
+# Merge data frames into a master dataframe 'df'
+df = merge(df.activity, df.sleep, all.x=TRUE, by.x=c('Id','Date'))
+
+# view(df)
+str(df) # remember there are some missing data from sleep data
 ```
 
-
 ---
+
 ## 3. Exploratory analysis
 
 ### Question1: How many steps would be required to burn 100 calories?
 ```{r} 
 # Scatter plot to visualize relationships
-df.clean %>% 
+df %>% 
   select(c('TotalSteps', 'Calories')) %>% 
   drop_na() %>% 
   ggplot(aes(x=TotalSteps, y=Calories)) + geom_point() + labs(title='How correlated steps and calories burnt?')
 ```
 ```{r}
-df.clean %>% select(c(TotalSteps, TotalDistance, Calories)) %>% cor()
+df %>% select(c(TotalSteps, TotalDistance, Calories)) %>% cor()
 ```
 
 There is moderately positive correlation between steps and calories. It is obvious that steps and distance are highly correlated.
@@ -114,43 +123,45 @@ There is moderately positive correlation between steps and calories. It is obvio
 ```{r}
 # Using linear regression
 # One particular outlier found deviating the trend - so remove steps > 30000
-df.clean %>% 
+df %>% 
   filter(TotalSteps<30000) %>% 
   drop_na() %>% 
   lm(formula=Calories~TotalSteps) %>% 
   summary()
 ```
+
 Given a R-squared, the 16.8% of variability in calories can be explained by total steps. P value is low, and the relationship is statistically significant where 1000 steps (alone) could explain 75.61 calories burnt (7.561e-02 * 1000).
 
 Therefore, on average across the users in the data, it would require 1323 steps to burn 100 calories. Assumption holds that there is a casual relationship between steps and calories - which makes sense intuitively.
 
----
+
+
 ### Question2: Does degree of activities/distance influence calories burnt?
 
-```{r}
+```{r, message=FALSE,  warning=FALSE}
 # Plot the relationship between distances of 4 different activity types and calories
-# p1. calories vs very active distance 
-p1.dist = ggplot(df.clean, aes(x=VeryActiveDistance, y=Calories)) + 
+# f1. calories vs very active distance 
+f1 = ggplot(df, aes(x=VeryActiveDistance, y=Calories)) + 
   geom_point(color='black') + 
-  geom_smooth(method='loess', color='red')
+  geom_smooth(formula=y~x, method='loess', color='red')
 
-# p2. calories vs moderately active distance 
-p2.dist = ggplot(df.clean, aes(x=ModeratelyActiveDistance, y=Calories)) + 
+# f2. calories vs moderately active distance 
+f2 = ggplot(df, aes(x=ModeratelyActiveDistance, y=Calories)) + 
   geom_point(color='black') + 
-  geom_smooth(method='loess', color='orange')
+  geom_smooth(formula=y~x, method='loess', color='orange')
 
-# p3. calories vs lightly active distance 
-p3.dist = ggplot(df.clean, aes(x=LightActiveDistance, y=Calories)) + 
+# f3. calories vs lightly active distance 
+f3 = ggplot(df, aes(x=LightActiveDistance, y=Calories)) + 
   geom_point(color='black') + 
-  geom_smooth(method='loess', color='yellow')
+  geom_smooth(formula=y~x, method='loess', color='yellow')
 
-# p4. calories vs sedentary distance 
-p4.dist = ggplot(df.clean, aes(x=SedentaryActiveDistance, y=Calories)) + 
+# f4. calories vs sedentary distance 
+f4 = ggplot(df, aes(x=SedentaryActiveDistance, y=Calories)) + 
   geom_point(color='black') + 
-  geom_smooth(method='loess', color='green')
+  geom_smooth(formula=y~x, method='loess', color='green')
 
 # Combine plots
-grid.arrange(p1.dist, p2.dist, p3.dist, p4.dist, nrow=2)
+grid.arrange(f1, f2, f3, f4, nrow=2)
 ```
 
 There is a negative trend between `moderately active distance` and `calories burnt`, which is not intuitive. Seeing the graph, this trend is resulted by some outliers (more than 3.5 KM over 1500-2000 calories burnt). It may be worth checking what they are - in the following section.
@@ -159,190 +170,176 @@ On the other hand, trend is not obvious between `sedentary active distance` and 
 
 Let's plot the minutes vs calories to see if the trend draws the similar trend lines.
 
-```{r}
+```{r, message=FALSE,  warning=FALSE}
 # Plot the relationship between minutes of 4 different activity types and calories
-# p1. calories vs very active minutes 
-p1.min = ggplot(df.clean, aes(x=VeryActiveMinutes, y=Calories)) + 
+# f1. calories vs very active minutes 
+f1 = ggplot(df, aes(x=VeryActiveMinutes, y=Calories)) + 
   geom_point(color='black') + 
-  geom_smooth(method='loess', color='red')
+  geom_smooth(formula=y~x, method='loess', color='red')
 
-# p2. calories vs fairly active minutes 
-p2.min = ggplot(df.clean, aes(x=FairlyActiveMinutes, y=Calories)) + 
+# f2. calories vs fairly active minutes 
+f2 = ggplot(df, aes(x=FairlyActiveMinutes, y=Calories)) + 
   geom_point(color='black') + 
-  geom_smooth(method='loess', color='orange')
+  geom_smooth(formula=y~x, method='loess', color='orange')
 
-# p3. calories vs lightly active minutes 
-p3.min = ggplot(df.clean, aes(x=LightlyActiveMinutes, y=Calories)) + 
+# f3. calories vs lightly active minutes 
+f3 = ggplot(df, aes(x=LightlyActiveMinutes, y=Calories)) + 
   geom_point(color='black') + 
-  geom_smooth(method='loess', color='yellow')
+  geom_smooth(formula=y~x, method='loess', color='yellow')
 
-# p4. calories vs sedentary minutes 
-p4.min = ggplot(df.clean, aes(x=SedentaryMinutes, y=Calories)) + 
+# f4. calories vs sedentary minutes 
+f4 = ggplot(df, aes(x=SedentaryMinutes, y=Calories)) + 
   geom_point(color='black') + 
-  geom_smooth(method='loess', color='green')
+  geom_smooth(formula=y~x, method='loess', color='green')
 
 # Combine plots
-# install.packages('gridExtra')
-# library(gridExtra)
-grid.arrange(p1.min, p2.min, p3.min, p4.min, nrow=2)
+grid.arrange(f1, f2, f3, f3, nrow=2)
 ```
 
 `Moderately active (or Fairly active) minutes` still show a negative trend line, very likely due to the outliers. It is interesting to observe that `sedentary minutes` and `calories` now show a trend thanks to a few data marking non-zero values. It is suspicious now that the health device may not be measuring sedentary distances in a correct manner. Let's also take a look at it.
 
 ```{r}
 # It should have a positive linear trend, or there is something wrong
-df.clean %>% 
-  ggplot(aes(x=SedentaryActiveDistance, y=SedentaryMinutes)) + geom_point()
+df %>% ggplot(aes(x=SedentaryActiveDistance, y=SedentaryMinutes)) + geom_point()
 ```
 The graph clearly shows that the device captured minute records up to 1500 minutes despite zero distance recorded. Those records account for 91.3% of the total records, which is seriously wrong. It makes more sense that we use minutes variables instead of distance variables.
 
 ```{r}
-df.clean %>% 
-  filter(SedentaryActiveDistance==0) %>% 
-  nrow() / nrow(df.clean)
+df %>% filter(SedentaryActiveDistance==0) %>% nrow() / nrow(df)
 ```
 
 Let's now inspect outliers that make moderate active vs calories negative trend. Outliers is characterized more than 75 minutes moderate(fairly) active over 1500-2000 calories burnt.
 
 ```{r}
-df.clean %>% 
-  filter(FairlyActiveMinutes>75 & Calories > 1500 & Calories < 2000) # 13 records
+df %>% filter(FairlyActiveMinutes>75 & Calories > 1500 & Calories < 2000) # 13 records
 ```
 It appears that the outliers are from 13 records from one particular user with the id #3977333714. Let's inspect this person.
 
 ```{r}
-df.clean %>% 
-  filter(Id == 3977333714) %>% 
-  select(c(1, 3, 4, 11: ncol(df.clean))) %>% 
+df %>% filter(Id == 3977333714) %>% 
+  select(c(1, 3, 4, 11: ncol(df))) %>% 
   summary()
 ```
 
 ```{r}
-df.clean %>% 
-  filter(Id != 3977333714) %>% 
-  select(c(1, 3, 4, 11: ncol(df.clean))) %>% 
+df %>% filter(Id != 3977333714) %>% 
+  select(c(1, 3, 4, 11: ncol(df))) %>% 
   summary()
 ```
+
 The user with id #3977333714 is identified as the outlier. The person is relatively more active than the others given higher median very active, especially fairly active minutes and higher steps - but calories burnt is not comparatively high. Compared to the other users,  the user lacks sleeps (on average less than 5 hours asleep vs 7 hours in general)
 
 Let's plot again removing this outlier.
 
 ```{r}
-df.clean %>% 
-  filter(Id != 3977333714) %>% 
+df %>% filter(Id != 3977333714) %>% 
   ggplot(aes(x=FairlyActiveMinutes, y=Calories)) + 
   geom_point(color='black') + 
-  geom_smooth(method='loess', color='orange')
+  geom_smooth(formula=y~x, method='loess', color='orange')
 ```
 Removing the outlier, tt now shows positive trend between `FairlyActiveMinutes` and `Calories` burnt - which makes more sense.
 
 ```{r}
 # Slicing activity and calorie data
 # Activity data includes 4 types of activities measured minutes
-lm.activity = df.clean %>% 
+lm.calorie = df %>% 
   filter(Id != 3977333714) %>%  # filtering the outlier user
   select(c(11:15)) %>%  # selecting only minutes and calories data
   drop_na() %>% 
   lm(formula=Calories~.) 
 
-summary(lm.activity)
+summary(lm.calorie)
 ```
+
 ```{r}
-lm.activity$coefficients
+lm.calorie$coefficients
 ```
 
 The multivariate linear regression model reports the coefficients between activity minutes and calories. It makes sense that the more active the more calories burnt. It is interesting to see a big division between active vs non active when it comes to its effect on burning calories. It implies that to burn calories, just lightly or sedentary activities are not helpful. It is especially true for sedentary activity.
 
----
+
 ### Question3: How does steps and activities influence sleep time?
 
 ```{r}
 # Create a new data frame with relevant features 
-df.clean.sleep = df.clean %>% 
-  select(c(1, 3, 4, 11: ncol(df.clean))) 
+df.temp = df %>% select(c(1, 3, 4, 11: ncol(df))) %>% drop_na()
 ```
 
 ```{r}
 # Plotting the relationship between each type of activity and time asleep
 
-# p1. Total minutes asleep vs very active minutes
-p1.sleep = df.clean.sleep %>% 
-  drop_na() %>% 
-  ggplot(aes(x=VeryActiveMinutes, y=TotalMinutesAsleep)) + geom_point(color='black') + geom_smooth(method='loess', color='red')
+# f1. Total minutes asleep vs very active minutes
+f1 = df.temp %>% 
+  ggplot(aes(x=VeryActiveMinutes, y=TotalMinutesAsleep)) + geom_point(color='black') + 
+  geom_smooth(formula=y~x, method='loess', color='red')
 
-# p2. Total minutes asleep vs fairly active minutes 
-p2.sleep = df.clean.sleep %>% 
-  drop_na() %>% 
-  ggplot(aes(x=FairlyActiveMinutes, y=TotalMinutesAsleep)) + geom_point(color='black') + geom_smooth(method='loess', color='orange')
+# f2. Total minutes asleep vs fairly active minutes 
+f2 = df.temp %>% 
+  ggplot(aes(x=FairlyActiveMinutes, y=TotalMinutesAsleep)) + geom_point(color='black') + 
+  geom_smooth(formula=y~x, method='loess', color='orange')
 
-# p3. Total minutes asleep vs lightly active minutes 
-p3.sleep = df.clean.sleep %>% 
-  drop_na() %>% 
-  ggplot(aes(x=LightlyActiveMinutes, y=TotalMinutesAsleep)) + geom_point(color='black') + geom_smooth(method='loess', color='yellow')
+# f3. Total minutes asleep vs lightly active minutes 
+f3 = df.temp %>% 
+  ggplot(aes(x=LightlyActiveMinutes, y=TotalMinutesAsleep)) + geom_point(color='black') + 
+  geom_smooth(formula=y~x, method='loess', color='yellow')
 
-# p4. Total minutes asleep vs sedentary minutes 
-p4.sleep = df.clean.sleep %>% 
-  drop_na() %>% 
-  ggplot(aes(x=SedentaryMinutes, y=TotalMinutesAsleep)) + geom_point(color='black') + geom_smooth(method='loess', color='green')
+# f4. Total minutes asleep vs sedentary minutes 
+f4 = df.temp %>% 
+  ggplot(aes(x=SedentaryMinutes, y=TotalMinutesAsleep)) + geom_point(color='black') + 
+  geom_smooth(formula=y~x, method='loess', color='green')
 
 # Combine plots
-# install.packages('gridExtra')
-# library(gridExtra)
-grid.arrange(p1.sleep, p2.sleep, p3.sleep, p4.sleep, nrow=2)
+grid.arrange(f1, f2, f3, f4, nrow=2)
 ```
+
 It is not obvious to detect outliers from the plots. However, it appears that the correlation between type of activity (intensity) and sleep time is weak. Let's see its statistical significant with linear regression.
 
 ```{r}
-df.clean.sleep %>% 
-  drop_na() %>% 
-  select(c(4:7, 10)) %>% 
+df.temp %>% select(c(4:7, 10)) %>% 
   lm(formula=TotalMinutesAsleep~.) %>% 
   summary()
 ```
+
 Total minutes asleep can be partially explained by intensity of activity but it is negatively correlated. Let's now extend this model with more predictor variables like TotalDistance and Steps.
+
 ```{r}
-df.clean.sleep %>% 
-  drop_na() %>% 
-  select(c(2:7, 10)) %>% 
+df.temp %>% select(c(2:7, 10)) %>% 
   lm(formula=TotalMinutesAsleep~.) %>% 
   summary()
 ```
+
 There is not much of improvement in the explainability of variables by adding steps and distance. Also, TotalSteps  TotalDistance do not confidently show relationship with sleep time.
 Let's now see if intensity can help reduce the time taken to fall asleep (TotalTimeInBed - TotalMinutesAsleep) - the assumption is that the smaller the time, the more quality one's sleep is.
 
 ```{r}
-df.clean.sleep %>% 
-  drop_na() %>% 
+df.temp %>% 
   mutate(TimeTakenToSleep = TotalTimeInBed - TotalMinutesAsleep) %>% 
   lm(formula=TimeTakenToSleep~VeryActiveMinutes+FairlyActiveMinutes+LightlyActiveMinutes+SedentaryMinutes) %>% 
   summary()
 ```
+
 Given the R-squared, intensity of activities alone cannot fully explain the time taken to fall asleep. 
 
 
----
 ### Question4: How does users use the device throughout days of week. Any particular patterns or differences? 
 
 ```{r}
 # Create day of week variable
-df.clean$DayOfWeek = weekdays(df.clean$Date)
-
-# Make it a categorical variable in order
-# df.clean$DayOfWeek = factor(df.clean$DayOfWeek, levels= c("Sunday", "Monday", 
-#     "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"))
+df.temp = df
+df.temp$DayOfWeek = weekdays(df.temp$Date)
 ```
 
-```{r}
-# Check normality of each variable
+```{r, message=FALSE,  warning=FALSE}
+## Check normality of each variable
 
-# colnames = colnames(df.clean)
+# colnames = colnames(df.clean.dow)
 # for (i in 1:length(colnames)){
 #   # Check if a variable is numeric
-#   is_num = is.numeric(df.clean[,i])
+#   is_num = is.numeric(df.clean.dow[,i])
 #   colname = colnames[i]
 #   if (is_num) {
 #     print(colname)
-#     print(shapiro.test(df.clean[,i]))  
+#     print(shapiro.test(df.clean.dow[,i]))
 #   }
 # }
 
@@ -350,36 +347,34 @@ df.clean$DayOfWeek = weekdays(df.clean$Date)
 # When p-value < 0.1, the hypothesis of normality will be rejected
 # In other words, if the p value < 0.1, the distribution of a variable is not normal.
 
-df.clean %>% 
-  select_if(is.numeric) %>% 
+df.temp %>% select_if(is.numeric) %>% 
   summarise_all(.funs = funs(pval = shapiro.test(.)$p.value))
 ```
 According to Shapiro-Wilk's test, none of the numeric features (i.e. distance, step, activity distance/minute, sleep, etc) are normal. So the aggregation through summary statistics should be carefully performed For example, mean of a feature is not relevent - let's use median instead.
 
 ```{r}
 # Without sleep data that has missing values
-df.dow.stats = df.clean %>% 
-  select(c(3:4, 11:ncol(df.clean)-4)) %>% 
-  aggregate(by=list(c(df.clean$DayOfWeek)), median) 
+df.temp.stats = df.temp %>% 
+  select(c(3:4, 11:ncol(df.temp)-4)) %>% 
+  aggregate(by=list(c(df.temp$DayOfWeek)), median) 
   
-tibble(df.dow.stats)
-df.dow.stats = rename(df.dow.stats, DayOfWeek = Group.1)
-df.dow.stats$DayOfWeek = factor(df.dow.stats$DayOfWeek, levels= c("Sunday", "Monday",
-    "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"))
+df.temp.stats = rename(df.temp.stats, DayOfWeek = Group.1)
+df.temp.stats$DayOfWeek = factor(df.temp.stats$DayOfWeek, 
+                                 levels= c("Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"))
 ```
 
 
 ```{r}
 # Plotting the results
-p1.dow = df.dow.stats %>% ggplot(aes(x=DayOfWeek, y=TotalDistance)) + geom_bar(stat = "identity")
-p2.dow = df.dow.stats %>% ggplot(aes(x=DayOfWeek, y=TotalSteps)) + geom_bar(stat = "identity")
-grid.arrange(p1.dow, p2.dow, ncol=1)
-
+f1 = df.temp.stats %>% ggplot(aes(x=DayOfWeek, y=TotalDistance)) + geom_bar(stat = "identity")
+f2 = df.temp.stats %>% ggplot(aes(x=DayOfWeek, y=TotalSteps)) + geom_bar(stat = "identity")
+grid.arrange(f1, f2, ncol=1)
 ```
-  The level of activities peaks on Tuesday and the lowest on Sunday.
+The level of activities peaks on Tuesday and the lowest on Sunday.
   
   
 ---
+
 ## 4. Further Analysis through Clustering 
 
 **Methodology:** Hierarchical clustering will firstly be performed and a dendrogram will be plotted to intuitively evaluate the number of clusters needed. KMeans clustering will be followed with the same number of clustering assigned to determine **k** centeroids to be used.
@@ -390,105 +385,92 @@ grid.arrange(p1.dow, p2.dow, ncol=1)
 Create a new data frame filtering out unnecessary / duplicated variables. To remove
 
 1. The 4 variables related to distances by intensities - to use aggregated `TotalDistance` and the other 4 `ActiveMinutes` variables.
-
 2. `Date` variable as the new data frame will represent numeric variables grouped by individual ids
-
 3. `TrackerDistance` and `LoggedActivitiesDistance` are redundant for our analysis.
+4. All sleep data will be dropped due to missing values
 
-4. `TotalTimeInBed` feature will be used to create a new `MinutesToFallSleep` variable and be dropped as it gives no valuable information alone.
 
-5. `TotalSleepRecords` will also be dropped.
-
-```{r}
-# Create a new dataframe 'df.clustering' after processing variables
-df.clustering = df.clean %>% 
-  mutate(MinutesToFallSleep=TotalTimeInBed-TotalMinutesAsleep) %>% # now 19 variables in total
-  select(!c(2, 5:10, 16, 18))
-
-str(df.clustering)
-```
 Now aggregate the numeric variables by `Id`. As we observed that all the numeric features are skewed. Therefore, we will represent **median** values. There are 9 Ids that do not have sleep data at all so filling NA values is not possible - as the original `df.sleep` data had contain records from 24 ids. Let's firstly conduct a clustering without sleep data, which means we will exclude sleep variables so all 33 ids can be used. As it will mostly contains activity data, save it as `df.grouped.activity` 
 
-```{r}
-# Create 'df.grouped.activity' data frame - 33 unique ids excluding sleep variables
-df.grouped.activity = df.clustering %>% select(!c(TotalMinutesAsleep, MinutesToFallSleep)) 
-df.grouped.activity = df.grouped.activity %>% aggregate(by=list(df.grouped.activity$Id), median)  
+```{r, message=FALSE,  warning=FALSE}
+# Remove unncessary cols and
+# Transform the clustering dataframe - 33 unique ids excluding sleep variables
+df.clustering  = df %>% select(-c(2, 5:10, 16:ncol(df))) %>% 
+  aggregate(by=list(df$Id), median)  
 
 # Inspect the dataset
-dim(df.grouped.activity) # should have 33 unique ids
-sum(!complete.cases(df.grouped.activity)) # no missing values
+dim(df.clustering) # should have 33 unique ids
+sum(!complete.cases(df.clustering)) # no missing values
 ```
 
 Clustering algorithms performs bad on data with different scales so standardising the data is important.
 
 ```{r}
-# Remove unnecessary columns
-df.grouped.activity.scaled = df.grouped.activity %>% select(!c(1:2))
-
-# view(df.grouped.activity.scaled)
-# Re-scaling dataset
-df.grouped.activity.scaled = scale(df.grouped.activity.scaled)
+# Drop id columns unnecessary columns
+# and re-scaling 
+df.clustering.scaled = df.clustering %>% select(!c(1:2)) %>% scale()
+head(df.clustering.scaled)
 ```
 
 ### Hierarchical clustering (agglomerative - bottom up)
 
 ```{r}
 # 1. Compute distances across between variables
-dist.activity = dist(df.grouped.activity.scaled, method='euclidean')
+dist.cluster = dist(df.clustering.scaled, method='euclidean')
 
 # 2. Clustering based on the computed distance
-hclust.activity = hclust(dist.activity, method ='ward.D2')
+tree = hclust(dist.cluster, method ='ward.D2')
 
 # 3. Plot a dendrogram
-plot(hclust.activity)
+plot(tree)
 ```
 
 The height represents the degree of distance between clusters. Intuitively base don the visualization, grouping with 5 clusters are reasonable - note that there is an potential outlier (labled as 12). 
 
 ```{r}
 # Cut trees with 5 clusters
-hseg.activity = cutree(hclust.activity, k=5)
+seg = cutree(tree, k=5)
 
 # Attaching segment information to the data frames
-df.grouped.activity$SegHclust = hseg.activity
-table(df.grouped.activity$SegHclust) # Cluster 3 has one record which is be a potential outlier.
+df.clustering$SegHclust = seg
+table(df.clustering$SegHclust) # Cluster 4 has one record which is be a potential outlier.
 ```
 
 ```{r}
 # Gain insights over the outlier
-df.grouped.activity[df.grouped.activity$SegHclust == 4, 'Id'] # Id = 3977333714
+df.clustering[df.clustering$SegHclust == 4, 'Id'] # Id = 3977333714
 ```
 
-Remember that the #Id 3977333714 is the user that was classified as an outlier in the previous descriptive analysis. This user spent more minutes staying fairly active but did not burn comparatively enough calories than others - the user lacked sleeps as well. By removing this user, the relationship activity and calories was clearer. By keeping this outlier information in mind, let's review the segementation report as below:
+Remember that the #Id 3977333714 is the user that was classified as an outlier in the previous descriptive analysis. This user spent more minutes staying fairly active but did not burn comparatively enough calories than others - the user lacked sleeps as well. By removing this user, the relationship activity and calories was clearer. By keeping this outlier information in mind, let's review the segmentation report as below:
 
 ```{r}
 # Group by segments and print the results
-df.grouped.activity %>% 
-  mutate(TotalMinutes=VeryActiveMinutes+FairlyActiveMinutes+LightlyActiveMinutes+SedentaryMinutes) %>%  # Aggregate all minutes 
-  select(!c(1:3)) %>% 
-  aggregate(by=list(df.grouped.activity$SegHclust), median) 
+df.clustering %>% 
+  mutate(TotalMinutes=VeryActiveMinutes+FairlyActiveMinutes+LightlyActiveMinutes+SedentaryMinutes) %>%  
+  select(!c(1:2)) %>% 
+  aggregate(by=list(df.clustering$SegHclust), median) 
 ```
 
 Each segment is expected to have a distinctive property from the others. Let's take a closer look:
 
 By `SegHclust`:
 - 1: 'Active users' who stay fairly active but less likely to spend time in sedentary activities. Although total activity minutes are comparatively low, total steps and distance (therefore calories burnt) are high, which proves that they often engage in more intense activities.
-- 2: 'Inactive users' who enjoy wearing the device but most likely engage in light / sedentary activities - no active minutes reported and total distance and steps are noticeably lower than the other segments.
+- 2: 'Inactive users' who enjoy wearing the device but most likely engage in sedentary activities - no active minutes reported and total distance and steps are noticeably lower than the other segments.
 - 3: 'Light users' who are mostly likely spending time lightly active / sedentary but spare some time for more intense activities which differentiate them from 'inactive' users.
-- 4: Represents a particular user #3977333714, fairly active but calories burnt is the lowest possibly due to insufficient total activity minutes. Ironically, total steps and Total distance are comparatively high so it is suspicious that the activity minutes are not correctly captured by the device.
+- 4: Represents an outlier (user #3977333714), fairly active but calories burnt is the lowest possibly due to insufficient total activity minutes. Ironically, total steps and Total distance are comparatively high so it is suspicious that the activity minutes are not correctly captured by the device.
 - 5: 'Power users' who largely very/fairly active. Steps and distance are very high and burnt lots of calories every day. Total minutes are not the highest which may indicate that the user does not wear the device as often when engaging in lighter activities.
 
 Let's map the description onto the cluster numbers.
 ```{r}
 # Instantiate a column to map
-df.grouped.activity$SegHclustLabel = NA
+df.clustering$SegHclustLabel = NA
 
 # Map with number in 'SegHclust' with labels
-df.grouped.activity$SegHclustLabel[which(df.grouped.activity$SegHclust == 1)] = 'Active'
-df.grouped.activity$SegHclustLabel[which(df.grouped.activity$SegHclust == 2)] = 'Inactive'
-df.grouped.activity$SegHclustLabel[which(df.grouped.activity$SegHclust == 3)] = 'Light'
-df.grouped.activity$SegHclustLabel[which(df.grouped.activity$SegHclust == 4)] = 'Outlier'
-df.grouped.activity$SegHclustLabel[which(df.grouped.activity$SegHclust == 5)] = 'Power'
+df.clustering$SegHclustLabel[which(df.clustering$SegHclust == 1)] = 'Active'
+df.clustering$SegHclustLabel[which(df.clustering$SegHclust == 2)] = 'Inactive'
+df.clustering$SegHclustLabel[which(df.clustering$SegHclust == 3)] = 'Light'
+df.clustering$SegHclustLabel[which(df.clustering$SegHclust == 4)] = 'Outlier'
+df.clustering$SegHclustLabel[which(df.clustering$SegHclust == 5)] = 'Power'
 ```
 
 As there are many variables, to represent the relationship in 2D plot, let's use two correlated variables: total steps and calories.
@@ -496,8 +478,9 @@ The grouping is fairly distinctive but with noise, attributed to the low sample 
 
 ```{r}
 # Plotting
-df.grouped.activity %>% 
-  ggplot(aes(x=TotalSteps, y=Calories, color=as.factor(SegHclustLabel), size = 2.5)) + geom_point()
+df.clustering %>% 
+  ggplot(aes(x=TotalSteps, y=Calories, color=as.factor(SegHclustLabel), size = 2.5)) + geom_point() + 
+  geom_point(data=df.clustering %>% filter(Id==3977333714), pch=21, size=10, colour='blue') 
 ```
 
 ### Kmeans clustering
@@ -505,50 +488,47 @@ df.grouped.activity %>%
 ```{r}
 # Set a seed and run kmean clustering with 5 centeroids
 set.seed(20)
-kmclust = kmeans(df.grouped.activity.scaled, centers=5)
+kmclust = df.clustering.scaled %>%  kmeans(centers=5)
 
 # Assign clusters to each records
-df.grouped.activity$SegKmeans = kmclust$cluster
+df.temp = df.clustering
+df.temp$SegKmeans = kmclust$cluster
 
 # Aggregate the record by SegKmeans
 # Note that the number assigned to each cluster is different from hierarchical cluster
-df.grouped.activity %>% 
-  select(!c(1:3, 11:12)) %>% # hide unnecessary columns 
-  aggregate(by=list(df.grouped.activity$SegKmeans), median) 
-  
+df.temp %>% select(!c(1:2, 10:11)) %>% # hide unnecessary columns 
+  aggregate(by=list(df.temp$SegKmeans), median) 
 ```
 
 Let's look at the plot first to see the grouping more clearly.
 
 ```{r}
 # Plotting Kmeans clusters
-df.grouped.activity %>% 
+df.temp %>% 
   ggplot(aes(x=TotalSteps, y=Calories, color=as.factor(SegKmeans), size=2.5)) + geom_point() +
-  geom_point(data=df.grouped.activity %>% filter(Id==3977333714), pch=21, size=10, colour='purple') +
-  geom_point(data=df.grouped.activity %>% filter(TotalSteps > 5000 & TotalSteps < 7500 & Calories > 2500), pch=21, size=10, colour='red') 
+  geom_point(data=df.clustering %>% filter(Id==3977333714), pch=21, size=10, colour='purple') # outlier 
 ```
-Note that the outlier (circled in purple) is part of Segment 2 in KMeans clusters. Some noise are still found (i.e. 3 records circled in red that belongs to Segment 1). Let's try with 4 centerfolds, hoping to ignore an outlier and get more seperative clusters. 
+Let's try with 4 centerfolds, hoping to get more distinctive clusters. 
 
 ```{r}
-kmclust2 = kmeans(df.grouped.activity.scaled, centers=4)
+kmclust2 = df.clustering.scaled %>% kmeans(centers=4)
 
 # Assign clusters to each records
-df.grouped.activity$SegKmeans = kmclust2$cluster
+df.temp = df.clustering
+df.temp$SegKmeans = kmclust2$cluster
 
 # Aggregate the record by SegKmeans
 # Note that the number assigned to each cluster is different from hierarchical cluster
-df.grouped.activity %>% 
-  select(!c(1:2, 10:11)) %>% # hide unnecessary columns 
-  aggregate(by=list(df.grouped.activity$SegKmeans), median) %>% 
-  select(!c(1))
+df.temp %>% select(!c(1:2, 10:11)) %>% # hide unnecessary columns 
+  aggregate(by=list(df.temp$SegKmeans), median) 
+  
 
 # Plotting Kmeans clusters
-df.grouped.activity %>% 
+df.temp %>% 
   ggplot(aes(x=TotalSteps, y=Calories, color=as.factor(SegKmeans), size=2.5)) + geom_point() +
-  geom_point(data=df.grouped.activity %>% filter(Id==3977333714), pch=21, size=10, colour='purple') + # outlier  
-    geom_point(data=df.grouped.activity %>% filter(TotalSteps > 5000 & TotalSteps < 7500 & Calories > 2500), pch=21, size=10, colour='red') 
+  geom_point(data=df.temp %>% filter(Id==3977333714), pch=21, size=10, colour='purple') 
 ```
-Characteristics of 'power users' are less obvious when k=4, whereas the noise (i.3. 3 red circled points) still exist. It looks that hierarchical clustering resulted in a clearer representation, but let's perform a silhouette test on KMeans clustering to see if we can find the optimal k (# centeroids). 
+Kmeans clustering has been performed twice with 5 and 4 centroids each. However, we are not sure how many centroids are ideal. Let's perform a silhouette test to see if we can find the optimal k (# centeroids). 
 
 The below code is inspired by a [post on medium](https://medium.com/codesmart/r-series-k-means-clustering-silhouette-794774b46586).
 
@@ -559,8 +539,8 @@ require('cluster')
 
 # Function for silhouette test on 'df.grouped.activity.scaled'
 silhouette_test = function(k) {
-  km = kmeans(df.grouped.activity.scaled, centers=k)
-  ss = silhouette(km$cluster, dist(df.grouped.activity.scaled))
+  km = kmeans(df.clustering.scaled, centers=k)
+  ss = silhouette(km$cluster, dist(df.clustering.scaled))
   mean(ss[, 3])
 }
 
@@ -568,9 +548,9 @@ k = 2:10
 avg_sil = sapply(k, silhouette_test)
 plot(k, type='b', avg_sil, xlab='Number of clusters', ylab='Average silhoutte scores', frame=FALSE)
 ```
-The values from Silhouette scores range from -1 to 1 where a high value indicates that the data point is well matched to its own cluster. It looks that using 2 clusters is the optimal but practically speaking then clustering is not useful. On the other hands, too many clusters given the small sample size (33 ids) are not equally useful as each cluster then will be characterized from a few data points only. In a practical point of view, grouping by 4-5 clusters still make sense. 
+The values from Silhouette scores range from -1 to 1 where a high value indicates that the data point is well matched to its own cluster. It looks that using 2 clusters looks good but practically speaking then clustering is not useful. Also, too many clusters given the small sample size (33 ids) are not equally useful as each cluster then will be characterized from a few data points only. In a practical point of view, grouping by 4-5 clusters still make sense. 
 
-For the particular dataset, between the two clustering methods, hierarchical clustering provides clearer representation of clusters, which also successfully classifies an outlier. More data examples and features (including demographics for example) may be more helpful to divide groups.
+For the particular dataset, between the two clustering methods, hierarchical clustering provides clearer representation of clusters as it successfully classifies an outlier. More data examples and features (including demographics for example) may be more helpful to divide groups.
 
 
   
